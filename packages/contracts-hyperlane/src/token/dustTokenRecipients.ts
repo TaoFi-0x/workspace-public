@@ -7,6 +7,8 @@ export interface DustTokenRecipientsForChain {
     tokens: { address: Address }[];
     /** Amount in native tokens to dust */
     amount: bigint;
+    /** Minimum amount that must have been transferred to recipient to make them eligible for dusting */
+    minAmount?: bigint;
     /** onTransaction handler */
     onTransaction?: ({ hash, to }: { hash: Hash; to: Address }) => any;
 }
@@ -21,7 +23,7 @@ export function dustTokenRecipientsForChain(
     client: Client<Transport, Chain, Account>,
     params: DustTokenRecipientsForChain,
 ): () => void {
-    const { tokens, amount } = params;
+    const { tokens, amount, minAmount = 0n } = params;
 
     // chain metadata (for logging)
     const chain = client.chain;
@@ -55,8 +57,11 @@ export function dustTokenRecipientsForChain(
                 logs.map(async (l) => {
                     // Encoded as bytes32
                     const recipientBytes32: Hash | undefined = l.args.recipient;
+                    // Get the transfer amount
+                    const transferAmount = l.args.amount ?? 0n;
 
-                    if (recipientBytes32) {
+                    // Only process if recipient exists and transfer amount meets minimum threshold
+                    if (recipientBytes32 && transferAmount >= minAmount) {
                         // convert to Address
                         const recipient = sliceHex(recipientBytes32, 12, 32, { strict: true });
                         // recipient balance
